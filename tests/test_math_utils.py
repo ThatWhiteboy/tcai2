@@ -2,7 +2,11 @@
 
 import pytest
 import numpy as np
-from tcai2.math_utils import sigmoid, relu, softmax, mean_squared_error
+from tcai2.math_utils import (
+    sigmoid, relu, softmax, mean_squared_error,
+    tanh, swish, gelu, cross_entropy_loss, huber_loss,
+    batch_matrix_multiply, cosine_similarity, euclidean_distance
+)
 
 
 class TestSigmoid:
@@ -223,3 +227,259 @@ class TestMeanSquaredError:
         result = mean_squared_error(predictions, targets)
         expected = 1.0  # All differences are 1, squared = 1
         assert abs(result - expected) < 1e-10
+
+
+class TestTanh:
+    """Test cases for tanh function."""
+    
+    def test_tanh_basic(self):
+        """Test basic tanh functionality."""
+        result = tanh(0)
+        assert result == 0
+        
+        result = tanh([0, 1, -1])
+        expected = np.tanh([0, 1, -1])
+        np.testing.assert_allclose(result, expected)
+    
+    def test_tanh_derivative(self):
+        """Test tanh derivative."""
+        x = 0.5
+        result = tanh(x, derivative=True)
+        expected = 1 - np.tanh(x) ** 2
+        assert abs(result - expected) < 1e-10
+
+
+class TestSwish:
+    """Test cases for swish function."""
+    
+    def test_swish_basic(self):
+        """Test basic swish functionality."""
+        x = 1.0
+        result = swish(x)
+        expected = x * sigmoid(x)
+        assert abs(result - expected) < 1e-10
+    
+    def test_swish_with_beta(self):
+        """Test swish with custom beta."""
+        x = 1.0
+        beta = 2.0
+        result = swish(x, beta=beta)
+        expected = x * sigmoid(beta * x)
+        assert abs(result - expected) < 1e-10
+
+
+class TestGelu:
+    """Test cases for gelu function."""
+    
+    def test_gelu_approximate(self):
+        """Test approximate GELU."""
+        x = 1.0
+        result = gelu(x, approximate=True)
+        assert isinstance(result, (float, np.ndarray))
+        assert result > 0  # GELU should be positive for positive input
+    
+    def test_gelu_exact(self):
+        """Test exact GELU."""
+        x = 1.0
+        result = gelu(x, approximate=False)
+        assert isinstance(result, (float, np.ndarray))
+        assert result > 0
+
+
+class TestCrossEntropyLoss:
+    """Test cases for cross_entropy_loss function."""
+    
+    def test_cross_entropy_basic(self):
+        """Test basic cross-entropy loss."""
+        predictions = [[0.9, 0.1], [0.2, 0.8]]
+        targets = [[1, 0], [0, 1]]
+        
+        result = cross_entropy_loss(predictions, targets)
+        assert result > 0
+        assert isinstance(result, float)
+    
+    def test_cross_entropy_class_indices(self):
+        """Test cross-entropy with class indices."""
+        predictions = [[0.9, 0.1], [0.2, 0.8]]
+        targets = [0, 1]  # Class indices
+        
+        result = cross_entropy_loss(predictions, targets)
+        assert result > 0
+        assert isinstance(result, float)
+
+
+class TestHuberLoss:
+    """Test cases for huber_loss function."""
+    
+    def test_huber_loss_basic(self):
+        """Test basic Huber loss."""
+        predictions = [1, 2, 3]
+        targets = [1.1, 2.1, 3.1]
+        
+        result = huber_loss(predictions, targets)
+        assert result > 0
+        assert isinstance(result, float)
+    
+    def test_huber_loss_with_outliers(self):
+        """Test Huber loss with outliers."""
+        predictions = [1, 2, 10]  # Large outlier
+        targets = [1, 2, 3]
+        
+        result_huber = huber_loss(predictions, targets, delta=1.0)
+        result_mse = mean_squared_error(predictions, targets)
+        
+        # Huber loss should be less affected by outliers
+        assert result_huber < result_mse
+
+
+class TestBatchMatrixMultiply:
+    """Test cases for batch_matrix_multiply function."""
+    
+    def test_basic_multiplication(self):
+        """Test basic matrix multiplication."""
+        a = np.array([[1, 2], [3, 4]])
+        b = np.array([[5, 6], [7, 8]])
+        
+        result = batch_matrix_multiply(a, b)
+        expected = np.matmul(a, b)
+        
+        np.testing.assert_array_equal(result, expected)
+    
+    def test_with_caching(self):
+        """Test matrix multiplication with caching."""
+        a = np.array([[1, 2], [3, 4]])
+        b = np.array([[5, 6], [7, 8]])
+        
+        result1 = batch_matrix_multiply(a, b, use_cache=True)
+        result2 = batch_matrix_multiply(a, b, use_cache=True)
+        
+        np.testing.assert_array_equal(result1, result2)
+
+
+class TestCosineSimilarity:
+    """Test cases for cosine_similarity function."""
+    
+    def test_identical_vectors(self):
+        """Test cosine similarity of identical vectors."""
+        a = [1, 2, 3]
+        b = [1, 2, 3]
+        
+        result = cosine_similarity(a, b)
+        assert abs(result - 1.0) < 1e-10
+    
+    def test_orthogonal_vectors(self):
+        """Test cosine similarity of orthogonal vectors."""
+        a = [1, 0]
+        b = [0, 1]
+        
+        result = cosine_similarity(a, b)
+        assert abs(result - 0.0) < 1e-10
+    
+    def test_opposite_vectors(self):
+        """Test cosine similarity of opposite vectors."""
+        a = [1, 2, 3]
+        b = [-1, -2, -3]
+        
+        result = cosine_similarity(a, b)
+        assert abs(result - (-1.0)) < 1e-10
+    
+    def test_zero_vector(self):
+        """Test cosine similarity with zero vector."""
+        a = [0, 0, 0]
+        b = [1, 2, 3]
+        
+        result = cosine_similarity(a, b)
+        assert result == 0.0
+    
+    def test_different_lengths_raises_error(self):
+        """Test that different length vectors raise ValueError."""
+        a = [1, 2, 3]
+        b = [1, 2]
+        
+        with pytest.raises(ValueError, match="must have the same length"):
+            cosine_similarity(a, b)
+
+
+class TestEuclideanDistance:
+    """Test cases for euclidean_distance function."""
+    
+    def test_identical_vectors(self):
+        """Test Euclidean distance of identical vectors."""
+        a = [1, 2, 3]
+        b = [1, 2, 3]
+        
+        result = euclidean_distance(a, b)
+        assert abs(result - 0.0) < 1e-10
+    
+    def test_simple_distance(self):
+        """Test simple Euclidean distance."""
+        a = [0, 0]
+        b = [3, 4]
+        
+        result = euclidean_distance(a, b)
+        expected = 5.0  # 3-4-5 triangle
+        assert abs(result - expected) < 1e-10
+    
+    def test_negative_coordinates(self):
+        """Test Euclidean distance with negative coordinates."""
+        a = [-1, -1]
+        b = [1, 1]
+        
+        result = euclidean_distance(a, b)
+        expected = np.sqrt(8)  # sqrt((2)^2 + (2)^2)
+        assert abs(result - expected) < 1e-10
+    
+    def test_different_lengths_raises_error(self):
+        """Test that different length vectors raise ValueError."""
+        a = [1, 2, 3]
+        b = [1, 2]
+        
+        with pytest.raises(ValueError, match="must have the same length"):
+            euclidean_distance(a, b)
+
+
+class TestAdvancedActivations:
+    """Test cases for advanced activation functions."""
+    
+    def test_sigmoid_derivative(self):
+        """Test sigmoid derivative calculation."""
+        x = 0.5
+        result = sigmoid(x, derivative=True)
+        sig_x = sigmoid(x, derivative=False)
+        expected = sig_x * (1 - sig_x)
+        assert abs(result - expected) < 1e-10
+    
+    def test_relu_leaky(self):
+        """Test Leaky ReLU functionality."""
+        x = [-1, 0, 1]
+        alpha = 0.1
+        result = relu(x, alpha=alpha)
+        expected = [-0.1, 0, 1]
+        np.testing.assert_allclose(result, expected)
+    
+    def test_relu_derivative(self):
+        """Test ReLU derivative."""
+        x = [-1, 0, 1]
+        result = relu(x, derivative=True)
+        expected = [0, 0, 1]
+        np.testing.assert_array_equal(result, expected)
+    
+    def test_softmax_temperature(self):
+        """Test softmax with temperature scaling."""
+        x = [1, 2, 3]
+        
+        # Higher temperature should make distribution more uniform
+        result_high_temp = softmax(x, temperature=10.0)
+        result_low_temp = softmax(x, temperature=0.1)
+        
+        # High temperature should have lower max probability
+        assert np.max(result_high_temp) < np.max(result_low_temp)
+    
+    def test_softmax_axis(self):
+        """Test softmax along specific axis."""
+        x = np.array([[1, 2], [3, 4]])
+        result = softmax(x, axis=1)
+        
+        # Each row should sum to 1
+        row_sums = np.sum(result, axis=1)
+        np.testing.assert_allclose(row_sums, [1.0, 1.0])
